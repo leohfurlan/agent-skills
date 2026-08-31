@@ -1,0 +1,4 @@
+interface:
+  display_name: "Harness Atos SDD"
+  short_description: "Gera um harness SDD em três perfis"
+  default_prompt: "Use $harness-atos-sdd para preparar neste projeto um harness SDD no perfil standard."
