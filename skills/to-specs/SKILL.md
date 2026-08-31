@@ -1,6 +1,6 @@
 ---
 name: to-specs
-description: Inspect an existing codebase and interview about technical tradeoffs to turn selected PRD feature IDs into spec.md, plan.md and contract.md. Use for feature-level technical specifications, dependency integration and quality-gate planning, not implementation.
+description: Inspect an existing codebase and interview about technical tradeoffs to turn selected PRD feature IDs into spec.md, plan.md and contract.md, then continue into the to-tickets workflow. Use for feature-level technical specifications, dependency integration and quality-gate planning, not implementation.
 ---
 
 # Feature specification writer
@@ -65,3 +65,9 @@ Return actual artifact paths, decisions still awaiting approval and checks actua
 Publish only if the user's request authorizes it, using the configured exact tracker destination and ready-for-agent label mapping. Read project publication instructions first. Resolve missing setup with focused questions, preview necessary configuration changes, and resume the spec after resolution; no mandatory setup-command detour.
 
 Verify destination/label read-only before mutation. Missing access or external resources requires the specific user action or authorization. Check for an existing issue after an uncertain result before retrying. Verify written body and labels and return the link, reporting partial failures. Local drafting remains possible without a tracker. Publish as ready only when blocking decisions and dependencies satisfy the project's readiness policy.
+
+## 6. Continue directly to tickets
+
+Once the selected specifications are ready, immediately invoke the available `to-tickets` skill in the same flow. Pass the completed `spec.md`, `plan.md` and `contract.md` paths as its source context, together with the selected feature IDs and any relevant dependency or publication references already established. Do not stop at the specification handoff or ask the user to invoke `to-tickets` separately.
+
+Follow `to-tickets` as the authority for tracer-bullet slicing, blocking edges, user approval of the proposed breakdown and tracker publication. This continuation authorizes starting the ticket workflow, not silently approving or publishing tickets, implementing the feature, migrating data or deploying. If the specifications remain draft because of a blocking decision or missing dependency, report that blocker and do not represent downstream tickets as ready.

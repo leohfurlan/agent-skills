@@ -1,3 +1,3 @@
 interface:
   display_name: "To Specs"
-  short_description: "Create feature specs, contracts and plans"
+  short_description: "Create feature specs, then draft implementation tickets"
