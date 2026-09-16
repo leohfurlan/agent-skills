@@ -1,5 +1,6 @@
 ---
 name: expo-web-qa
+related_skills: [dogfood]
 description: QA exploratório automatizado de apps Expo/React Native rodando na web (localhost:8081) com Playwright — varredura de rotas × papéis × viewports, fluxos de escrita com captura de rede, screenshots e comparação por texto contra um mockup/design (Pen.dev .pen ou similar). Use quando precisar descobrir o que está implementado num app Expo Web, achar telas quebradas (403 silencioso, rota inexistente, HTML de erro do backend dentro da UI) ou produzir relatório de paridade app × mockup com evidência real.
 ---
 
@@ -153,7 +154,9 @@ Se `vision_analyze` estiver indisponível (chave inválida é erro comum), compa
    faltando = [t for t in textos_mockup if norm(t) not in norm(texto_renderizado_app)]
    ```
 3. Reporte `presentes/total` por tela — é um proxy honesto de paridade (diga isso no relatório) e expõe divergência de **dados** (mockup "Igreja X" vs seed "Igreja Y") que a comparação visual esconderia.
-4. Para telas que exigem navegação (ex.: detalhe aberto por clique), capture o texto **depois** de navegar de verdade dentro do app — uma URL direta pode cair em outro estado (link sem parâmetro obrigatório, por exemplo).
+4. Antes de comparar, **delegue os inventários em paralelo** (mockup e backend): cada subagente lê a fonte pesada e grava um `.md` em `output/`, devolvendo só um resumo curto. Um `.pen` com 49 telas vira 800 KB de markdown — não traga isso para o seu contexto.
+5. Para telas que exigem navegação (ex.: detalhe aberto por clique), capture o texto **depois** de navegar de verdade dentro do app — uma URL direta pode cair em outro estado (link sem parâmetro obrigatório, por exemplo).
+   ⚠️ Se a captura por URL direta caiu em erro/estado diferente, **a contagem dessa tela vira lixo** (0 presentes) e contamina o agregado. Recapture por navegação real e recalcule antes de publicar o número — foi exatamente assim que uma cobertura de 41,5 % foi publicada como 37,3 %.
 
 ## Passo 7 — Higiene do relatório
 
@@ -161,3 +164,40 @@ Se `vision_analyze` estiver indisponível (chave inválida é erro comum), compa
 - Separe: **implementado e funcionando** (com a evidência da execução) / **implementado e quebrado** (com repro numerada) / **pendente** (tela a tela, com % de cobertura).
 - Fixture de dados: confirme contagem no banco após a limpeza e diga o que foi removido.
 - Nunca afirme "não encontrado" a partir de busca em histórico: o app rodando é a fonte de verdade.
+
+## Passo 8 — Verifique o relatório ANTES de entregar (obrigatório)
+
+Todo número que você escreveu saiu de uma contagem sua, provavelmente em um comando de terminal lido de raspão. Antes de entregar, **re-derive cada afirmação quantitativa da fonte e compare com o texto do documento** — em um caso real, 4 de ~10 números estavam errados, incluindo a manchete de cobertura.
+
+Receita: escreva um script temporário (prefixo `hermes-verify-` em `%TEMP%`), com pares `check(nome, condição, detalhe)` acumulando PASS/FAIL e `sys.exit(1)` se houver falha; um esqueleto pronto está em `templates/verificar-afirmacoes.py`. Depois:
+
+1. Rode-o, **corrija o documento** para bater com o recalculado e rode de novo até passar.
+2. Preserve o script como evidência no diretório de saída (`output/.../verificar-relatorio.py`) e apague a cópia do temp.
+3. Diga explicitamente ao usuário **quais números você corrigiu** — relatório com auto-correção declarada vale mais que relatório "limpo" e silencioso.
+4. Rótulo honesto: se a suíte de testes do projeto rodou, é "suíte verde"; o resto é **verificação ad-hoc**, não suíte.
+
+O que re-derivar (e as armadilhas de contagem que já produziram erro):
+
+- **Contagens de tela/rota/tela**: conte por extensão de arquivo, não por `find | grep` de cabeça. "15 arquivos de rota" era 13 (`globs` duplicando padrões); declare se `_layout` entra na conta.
+- **Chamadas de função / ocorrências de padrão**: `re.findall(r'Alert\.alert\(')` em todos os arquivos → 14, não 21. Sempre a contagem do parser, nunca a de memória.
+- **Linhas de código**: `wc -l` conta quebras de linha; `sum(1 for _ in open(f))` conta uma linha a mais por arquivo. Fixe a convenção no script (`read().count("\n")`) para os dois lados baterem.
+- **Percentuais de paridade**: recalcule com a mesma função de normalização usada na análise e com as capturas corretas (ver Passo 6.5). Arredonde e afirme o par `presentes/total`, não só o percentual.
+- **Endpoints/N: derive do artefato vivo** (`GET /api/schema/` e conte pares método+path), não do resumo que você escreveu antes.
+- **Suíte de testes**: rode-a de verdade e cite a linha final (`67 passed`). Se o container não tem pytest, rode no host (`cd backend && python -m pytest -q`) — o "não tem pytest" é do container, não um defeito do projeto.
+- **Estado do banco após limpeza**: consultar o ORM e checar um marcador próprio (`LIMPO` vs `QA-ARTIFACT`), comparando com a contagem de seed.
+- **Integridade do markdown**: cercas de código balanceadas, tabelas com número de colunas consistente, ausência de marcadores de truncamento (`[truncated]`, `!!`) — lixo de edição passa fácil.
+- **Espelhamento de skill/arquivo**: SHA-256 das duas cópias (instalada e repositório) iguais.
+
+Se alguma checagem depende de serviço indisponível (API fora, schema inacessível), registre como **aviso** com o motivo — nunca como passa.
+
+O caso completo (quais números estavam errados, por que a captura por URL direta invalidou um agregado, e onde a suíte de testes realmente roda) está em `references/verificacao-do-relatorio.md`.
+
+## Arquivos de apoio
+
+| Arquivo | Uso |
+|---|---|
+| `templates/qa-sweep.mjs` | Varredura de rotas × papéis × viewports: copie, ajuste `ROUTES`/`ACCOUNTS` e rode. |
+| `templates/verificar-afirmacoes.py` | Esqueleto de verificação do relatório (re-deriva contagens, percentuais, schema, suíte, banco, hashes). |
+| `references/verificacao-do-relatorio.md` | Registro do que deu errado e as armadilhas de contagem. |
+
+Skill irmã: `dogfood` cobre o mesmo objetivo (QA exploratório → evidência → relatório) usando as ferramentas de browser interativas; use este aqui quando precisar de varredura em lote, captura de rede fim-a-fim e diff automático contra mockup.
