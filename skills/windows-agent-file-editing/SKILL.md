@@ -107,6 +107,17 @@ import ast; ast.parse(src)                        # sempre re-parsear
 - Regra de bolso depois de editar bloco: reler a região (ou rodar o checador de
   sintaxe) na MESMA rodada, não só no fim do lote.
 - Se um patch falha, NÃO repetir com o mesmo texto: reler a região exata antes.
+- **`skill_manage(action="patch")` recusa aspa escapada.** Erro real nesta classe:
+  `Escape-drift detected: old_string and new_string contain the literal sequence
+  '\"' but the matched region of the file does not`. Acontece por reflexo de
+  escapar as aspas dentro de `new_string`/`old_string` — o matcher procura barra
+  invertida onde o arquivo tem aspa. Reescreva o trecho **sem escapar** as aspas
+  (e sem cercar frases entre aspas com escape); o conteúdo entra igual.
+- **Editar frontmatter YAML de skill pede cuidado com `: `.** Um `new_string` com
+  dois-pontos seguido de espaço dentro da `description` (não citada) quebra o
+  YAML: `mapping values are not allowed here`. O patch é rejeitado inteiro (bom:
+  não grava torto). Reescreva usando `—`, parênteses ou vírgula no lugar de `: `,
+  ou cite a string inteira do campo.
 
 ## 3. read_file devolve `NNN|` — nunca regravar a partir dele
 
@@ -166,6 +177,18 @@ Regras que resolvem: rodar a assertiva sobre o **código sem comentários**
 (`const sidebarGroups`) em vez de qualquer ocorrência, e usar regex quando o
 padrão é regex (`/text\/html/i` não contém o literal `text/html`). Caso real:
 4 de 29 assertivas falharam e todas as quatro eram defeito do verificador.
+
+**Assertiva de simetria mente quando o invariante é de AUSÊNCIA.** Checar que um
+token aparece nos dois lados de um par (config instalada x verificador, cloud-init
+x script de aceite) é bom para nomes de arquivo, usuário e permissão — e errado
+para o que deve existir de um lado só. Casos reais no mesmo dia: (a) assertiva
+`"staticfiles" in backend` falhou porque o valor era
+`CompressedStaticFilesStorage` (caixa diferente — compare o **valor exato**, não
+um fragmento); (b) assertiva `"5432" in cloud_init and "5432" in verifier` falhou
+porque o invariante da porta do banco é *o verificador cobra fechada e o
+cloud-init não abre* — presença nos dois seria o defeito. Antes de escrever a
+assertiva, diga em voz alta qual é o invariante: presença, ausência, igualdade
+ou ordem. Presença simétrica só vale para identificadores compartilhados.
 
 ## 4. Backticks em `git commit -m "..."` viram command substitution
 
