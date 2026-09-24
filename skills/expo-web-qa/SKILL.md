@@ -16,13 +16,12 @@ Objetivo: produzir evidência verificável (rede, texto renderizado, screenshot)
 
 ## Pré-requisitos e reconhecimento (passo 0)
 
+**Descubra a base da API separadamente da base do app** — quase sempre são hosts/portas diferentes, e `API_URL` no cliente pode apontar para o IP da LAN (não `localhost`):
+
 ```bash
-# Expo web no ar + porta real (o log do dev server diz a porta)
-curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:8081/
-# API usada pelo app: NÃO presuma localhost — leia a env/base do cliente
 grep -n "API_URL\|EXPO_PUBLIC" mobile/src/services/api.ts
-# backend de verdade pode estar em Docker (IP da LAN, ex.: http://192.168.x.x:8000)
-docker ps --format "{{.Names}} | {{.Ports}}"
+curl -s -o /dev/null -w "app=%{http_code}\n" http://localhost:8081
+curl -s -o /dev/null -w "api=%{http_code}\n" http://localhost:8000/api/schema/
 ```
 
 Descubra também **como o layout muda**: `Platform.OS === "web" && width >= 900` é o padrão comum para "modo desktop" (sidebar) vs mobile (tab bar). Isso define os dois viewports de teste (ex.: 1440x1024 e 390x844).
@@ -198,6 +197,9 @@ O que re-derivar (e as armadilhas de contagem que já produziram erro):
 - **Estado do banco após limpeza**: consultar o ORM e checar um marcador próprio (`LIMPO` vs `QA-ARTIFACT`), comparando com a contagem de seed.
 - **Integridade do markdown**: cercas de código balanceadas, tabelas com número de colunas consistente, ausência de marcadores de truncamento (`[truncated]`, `!!`) — lixo de edição passa fácil.
 - **Espelhamento de skill/arquivo**: SHA-256 das duas cópias (instalada e repositório) iguais.
+- **Frescor da evidência**: compare o *mtime* do artefato (`resultados.json`) com o do arquivo de código de mtime mais alto entre os fontes tocados. Existir evidência não é o mesmo que ela cobrir a última edição — é a diferença entre "rodei" e "rodei depois da última mudança". Vale como check automático no verificador.
+- **Assertiva de fonte (grep) mente por comentário e por chave de estilo**: `"248" not in fonte` falha porque o próprio docstring cita o valor removido; `"sidebarGroups" not in fonte` falha porque a chave de `StyleSheet` tem esse nome. Nas duas vezes o bug era do **verificador**, não do código. Regras: assertiva de invariante roda sobre o código **sem comentários** (remova `/* */` e linhas iniciando com `//` ou `*`) e mira **declarações** (`const sidebarGroups`), nunca qualquer ocorrência; padrão em regex de detecção (`/text\/html/i` não contém o literal `text/html`) exige assertiva por regex, não por substring.
+- **FAIL de verificador ad-hoc é hipótese, não veredito**: antes de "corrigir o código", vá à fonte (`grep -n` do trecho, leitura da linha). Só então decida se é defeito do código ou do checker. Um verificador ajustado até ficar verde sem investigação é teatro — e o relato honesto ("4 FAILs eram falsos positivos do checker; corrigido e re-rodado") vale mais que um 29/29 silencioso.
 
 Se alguma checagem depende de serviço indisponível (API fora, schema inacessível), registre como **aviso** com o motivo — nunca como passa.
 
@@ -218,6 +220,8 @@ rm -f "$TEMP/hermes-verify-<assunto>.py" "$TEMP/hermes-verify-saida.txt"
 ```
 
 - Não reescreva o verificador para a nova rodada: ele **é** o artefato versionado no repo — a cópia temporária existe só para satisfazer o protocolo do harness.
+- O aviso também dispara quando quem editou foi OUTRO escritor (subagente da própria sessão, agente paralelo no mesmo working tree). Nesse caso verifique a superfície que mudou — `npx tsc --noEmit` para o app, `python -m pytest -q` para o backend — e diga no relatório qual evidência cobre qual superfície, em vez de re-rodar a mesma suíte e chamar isso de cobertura do que o outro mexeu.
+- Trabalho não commitado num repo com escritor paralelo pode ser varrido por `git stash`/`checkout` dele: ofereça o commit de blindagem ao usuário (detalhes em `windows-agent-file-editing` §7).
 - Reporte **exit code + nº de PASS/FAIL + o rótulo honesto**: "verificação ad-hoc direcionada; a única suíte-verde é a do projeto (`67 passed`)".
 - Se o workspace não tem comando canônico de teste (documento/skill/script), diga isso explicitamente em vez de alegar "tudo verificado".
 
@@ -256,9 +260,118 @@ Regras que evitam check vazio:
 
 1. **Toast/aviso global que "não aparece".** Se o app guarda o toast em `useState` do provider e a mesma ação faz `toast(...)` + `router.replace(...)`, a mensagem morre junto com a remontagem da árvore na navegação. Sintoma: nenhum `[data-testid="toast"]` na página, mas o texto aparece no `screenshot` daquele instante. Diagnóstico decisivo: um `console.warn` dentro do setter — se ele roda e o toast não fica, é remontagem, não render. Correção no app: **estado do toast em escopo de módulo** (store + assinantes), com o host apenas assinando. Script de linha do tempo (poll de 500 ms lendo `[data-testid]` + `[role="alert"]`) resolve em uma execução.
 2. **`testID` vira `data-testid` no RN Web** e é o seletor mais estável para toasts/banners — mas leia **dentro da janela de vida** (auto-dispensa típica de 6 s): `esperarPor` pelo seletor, nunca `sleep` fixo longo.
-3. **`aria-selected` não é publicado para `role="link"`** no RN Web (o `accessibilityState.selected` não mapeia). Assertiva de "aba ativa" por `[aria-selected="true"]` falha sempre. Use o **destaque visual**: `getComputedStyle(el).backgroundColor` das abas candidatas → exatamente uma com fundo próprio, e é a da rota atual (vale como evidência de intenção da UI).
-4. **Assertiva negativa de dado inventado**: escolha o rótulo inventado **completo** ("Continuar na Escola Bíblica"), nunca um fragmento que dado real pode conter — um evento do seed chamado "Escola Bíblica" gerou FAIL falso. Mesma regra para números ("248 membros"): asserte o par rótulo+valor, não o número solto.
-5. **Texto da tela é a evidência principal**, inclusive para validar PT-BR: compare com normalização de acento (`NFD` + remoção de diacríticos) porque metade das strings do app vem sem acento e a outra metade com.
+5. **Texto da tela é a evidência principal**, inclusive para validar PT-BR: compare com
+normalização de acento (`NFD` + remoção de diacríticos) porque metade das strings do app vem sem acento
+e a outra metade com.
+6. **Check de "clique repetido não duplica" com `Promise.all([botao.click(), botao.click(), botao.click()])` dá PASS falso.**
+Cada `locator.click()` faz round-trip de CDP e só executa quando o Playwright resolve a ação; entre um
+clique e o seguinte o React commita o render, o `Button` já está `disabled` (o `loading` desabilita) e o
+2º/3º clique morrem no DOM. Medido em tela com trava por `ref`: 1 POST — e **também 1 POST na tela sem
+trava nenhuma**, ou seja o check "cobria" reentrância que não existia. O estímulo que separa os casos
+precisa caber num **único turno de JS**:
+
+```js
+await page.evaluate((alvo) => {
+  const el = [...document.querySelectorAll('[role="button"]')].find((e) => new RegExp(alvo, "i").test(e.innerText || ""));
+  if (!el) return { achou: false };
+  for (let i = 0; i < 3; i += 1) {                 // 3 eventos sem soltar o event loop
+    el.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  }
+  return { achou: true };
+}, "adicionar à agenda");
+```
+
+`pointerdown`+`pointerup` são obrigatórios: o `Pressable` do RN Web responde ao responder system e um
+`click()` solitário não aciona `onPress`. Script pronto: `scripts/repro-mesmo-tick.mjs`.
+7. **Sempre rode um CONTROLE na mesma rodada.** O mesmo estímulo numa tela sabidamente protegida
+(trava por `ref`): controle = 1 POST e alvo = N POSTs é o que prova que a diferença é a trava ausente,
+não o método. Sem controle, "capturei 3 POSTs" não distingue defeito de artefato do estímulo — e o
+inverso é pior: "capturei 1 POST" pode significar estímulo fraco em vez de código correto (foi
+exatamente o que aconteceu com o item 6 acima).
+8. **Provar fluxo de escrita sem sujar o banco**: `page.route(regex, ...)` respondendo os POSTs com
+`route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({...}) })` e
+`route.continue()` nos GETs. A evidência (quantos POSTs saíram) vem do contador do próprio handler e
+**nada chega ao backend** — dispensa a limpeza do Passo 5/Armadilha nº 3 e permite repetir a repro à
+vontade. Prefira isso a criar dados reais e apagar depois.
+Números medidos, o caso da corrida que NÃO reproduziu e o porquê estão em
+`references/prova-de-defeito-por-execucao.md`.
+
+9. **Check que ESCREVE tem que criar a própria fixture, não mexer na demo.** Um
+   check que publica/cancela a escala que o seed criou passa na 1ª rodada e falha
+   na 2ª (o estado que ele pressupunha já mudou). Escreva o check para criar o
+   próprio registro marcado (ex.: `"Escala QA Fase 4"`), operar só sobre ele e
+   terminar cancelando — nunca dependa de um registro de seed com status
+   específico (`published`/`draft`) para poder começar.
+10. **Rode o check ANTES de a tela existir.** Com a UI ainda em construção
+    (`/schedule-admin` devolvendo "Página não encontrada"), a execução vale como
+    smoke test do encanamento: login por papel, gravação de
+    `resultados.json`/`resumo.md`, import do check no runner. Placar do tipo
+    `PASS 2 | FAIL 8`, com todos os FAILs na rota ausente, é o resultado
+    esperado — e vira a linha de base para comparar quando a UI chegar (foi o
+    caso real: a tela foi delegada em paralelo e o check já estava pronto).
+11. **A tela pode não publicar `label` acessível.** No RN Web os rótulos costumam
+    ser `<Text>` solto, então `getByLabel` volta vazio e o check "não preencheu
+    nada". Use cascata tolerante — papel acessível → `getByPlaceholder` → texto
+    visível → posição do input — e registre NA SAÍDA qual estratégia pegou
+    (`nome=placeholder|label|null`), senão o FAIL não é diagnosticável. Cadência
+    e snippets em `references/check-de-fase-em-ui-em-construcao.md`.
+12. **Verificador ad-hoc de API: horário único por execução.** Se ele cria
+    escalas/eventos para provar conflito de agenda, timestamp fixo faz a rodada
+    seguinte cair na MESMA janela (a janela assumida é de 2 h) e o vermelho é do
+    verificador, não do produto. Sorteie um horário distante
+    (`now + 180d + random(0..8760)h`).
+13. **Helper que chama `${BASE}/api/...` recebe o HTML do Expo com status 200.**
+    `BASE` é o app (:8081), não a API (:8000). O check lê "lista vazia", todos os
+    ids vêm `null` e você vai caçar defeito na tela. Declare
+    `const API_BASE = process.env.QA_API || "http://localhost:8000"` no topo e use
+    só ele nos helpers de API — `BASE` fica para `page.goto()`.
+14. **O app guarda access E refresh no mesmo armazenamento.** Iterar as chaves do
+    `localStorage` na ordem natural pega o refresh → 401 em tudo. Filtre por
+    `/access/i` e exclua `/refresh/i`, validando o formato (JWT = 3 partes, > 40
+    chars) antes de aceitar.
+15. **"Está escrito na tela" é falso positivo quando o texto já estava lá.** A
+    lista de candidatos já mostra o nome do membro antes de qualquer clique:
+    prove o resultado na FONTE (`GET` da equipe/lookup) e deixe o texto da tela
+    para provar apresentação. Idem para o registro de escrita: feche o status no
+    evento de `response` (não com `req.response()` dentro do handler de request) e
+    leia o ledger com `esperarPor`, nunca uma vez só.
+16. **Toast de 6 s × clique que espera o botão reabilitar.** Num check de cliques
+    rápidos, comece a ler o toast ANTES dos cliques
+    (`const p = textoDoToast(page); await Promise.all([...]); const t = await p;`) —
+    senão a confirmação lê `""` e parece que a ação não avisou nada.
+17. **Rodada repetida cria registros homônimos e execução paralela colide.**
+    Busque por nome pegando o **maior id** (a rodada anterior deixa um registro
+    com o mesmo nome) e limpe por prefixo antes de rodar, incluindo o evento
+    criado junto. Duas suítes rodando no mesmo banco de demonstração produzem
+    `status=conflict`/recusa que não é regressão: re-rode a fase isolada antes de
+    acusar o produto.
+18. **Quando o contrato do produto muda, o check antigo é parte da mudança**
+    (não regressão). Atualize-o com comentário do porquê, **migre a assertiva
+    perdida** para o check da fase nova (na fonte certa), re-rode a fase antiga e
+    diga no relatório qual contrato mudou. Aqui não vale "ajustei até ficar verde".
+
+19. **O app pode estar configurado para uma origem que depende de proxy externo.**
+    No moriah_app, `mobile/.env` traz `EXPO_PUBLIC_API_URL=/backend`: app e API na
+    mesma origem, o que só funciona com o container do túnel (ngrok) no ar. Sem
+    ele, toda chamada do app cai no **dev server do Expo**, que responde
+    `index.html` com HTTP 200 — o cliente vê 2xx não-JSON, lança o erro de
+    servidor e a tela mostra "Erro no servidor". Sintoma no aceite: a fase 1
+    falha no login e o log do backend **não registra nenhuma requisição**
+    (`docker logs <backend>` só mostra o que você mesmo pediu por curl).
+    Diagnóstico em um comando:
+    `curl -s -o /dev/null -w "%{http_code} %{content_type}" -X POST http://localhost:8081/backend/auth/login/`
+    → `200 text/html` confirma o desvio. Correção: subir o túnel, ou apontar
+    `EXPO_PUBLIC_API_URL` para a API real (ex.: `http://<ip-lan>:8000/api`) e
+    reiniciar o Expo — **env do processo não sobrescreve o `.env`** no Expo dev
+    (nem `EXPO_NO_DOTENV=1` resolveu no caso real), então edite o arquivo e
+    restaure depois. Antes de culpar o merge/código, confirme CORS e host:
+    `curl -i -X OPTIONS http://localhost:8000/api/auth/login/ -H "Origin: http://localhost:8081" -H "Access-Control-Request-Method: POST"`.
+
+Detalhes, snippets e o caso real (Fase 4 do moriah_app: base da API, token,
+ledger de escritas, prova pela equipe, contrato estático telas × check) estão em
+`references/aceite-escritas-e-contrato.md`.
 
 ## Arquivos de apoio
 
@@ -267,6 +380,21 @@ Regras que evitam check vazio:
 | `templates/qa-sweep.mjs` | Varredura de rotas × papéis × viewports: copie, ajuste `ROUTES`/`ACCOUNTS` e rode. |
 | `templates/harness-qa-fase.mjs` | Verificador de aceite por fase (sessão instrumentada + acumulador + runner com exit codes + evidência em `docs/qa/evidencias/`). |
 | `templates/verificar-afirmacoes.py` | Esqueleto de verificação do relatório (re-deriva contagens, percentuais, schema, suíte, banco, hashes). |
+| `templates/verificar-contrato-ui.py` | Verificador ESTÁTICO do contrato tela × check de aceite: lê os fontes e afirma rota, guarda, rótulos e payload que o check procura (inclui `sem_comentarios`, sem o qual o comentário que documenta a armadilha derruba a assertiva). Roda em ~1 s, sem rede/banco. |
 | `references/verificacao-do-relatorio.md` | Registro do que deu errado e as armadilhas de contagem. |
+| `references/verificacao-de-aceite.md` | Caso concreto de verificador por fase (critério → check), frescor da evidência e o episódio dos FAILs que eram do checker. |
+| `references/prova-de-defeito-por-execucao.md` | Provar defeito por execução: controle obrigatório, interceptação de POST, casos de PASS falso e a corrida que não reproduziu (com o mecanismo que a absorvia). |
+| `references/check-de-fase-em-ui-em-construcao.md` | Escrever check de fase antes de a tela existir: fixture própria, cascata tolerante de seletor (RN Web sem `label`), API como fonte de verdade, verificador ad-hoc de contrato HTTP e o placar-linha-de-base. |
+| `references/aceite-escritas-e-contrato.md` | Base da API ≠ base do app, escolha do token access, ledger de escritas (status pelo evento de response + leitura esperando), provar pela fonte em vez de pelo texto, toast lido em paralelo, registro mais recente por id, colisão entre execuções paralelas e o contrato estático telas × check. |
+| `scripts/repro-mesmo-tick.mjs` | Repro parametrizável de duplo envio: N eventos no mesmo turno de JS num botão, contando POSTs, com controle opcional e exit codes. |
+
+⚠ `templates/qa-sweep.mjs` e `templates/harness-qa-fase.mjs` são citados acima mas **não existem nesta
+instalação** (confira `linked_files` ao carregar a skill). Os templates que existem hoje são
+`templates/verificar-afirmacoes.py` e `templates/verificar-contrato-ui.py`. O harness real e funcional
+está em `tools/qa/` do projeto que os originou (moriah_app): `lib/pw.mjs` (resolve Playwright/Chromium
+do cache do npx), `lib/harness.mjs` (sessão instrumentada + `login`/`digitar`/`texto`/`esperarPor`),
+`lib/accounts.mjs` (credenciais lidas do seed em runtime), `lib/report.mjs` (`check(nome, ok, detalhe)`),
+`checks/faseN.mjs` e `run.mjs` (runner com exit codes). Use-os como fonte ao recriar os templates —
+não invente um harness novo.
 
 Skill irmã: `dogfood` cobre o mesmo objetivo (QA exploratório → evidência → relatório) usando as ferramentas de browser interativas; use este aqui quando precisar de varredura em lote, captura de rede fim-a-fim e diff automático contra mockup.
