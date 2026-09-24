@@ -15,6 +15,8 @@ Neste repositório há, por exemplo:
 - [diagnosing-bugs](skills/diagnosing-bugs/SKILL.md): orienta a investigação de problemas.
 - [code-review](skills/code-review/SKILL.md): orienta a revisão de mudanças.
 - [skill-creator](skills/skill-creator/SKILL.md): cria e evolui skills seguindo a política deste repositório.
+- [deploy-readiness-audit](skills/deploy-readiness-audit/SKILL.md): audita se um repositório está realmente pronto para produção — qual revisão seria implantada, o que está verde medido agora e quais costuras de deploy faltam, confrontando com o PRD/planos do próprio projeto.
+- [windows-agent-file-editing](skills/windows-agent-file-editing/SKILL.md): edita arquivos em sessões de agente no Windows (git-bash) sem corromper conteúdo — mascaramento de exibição, CRLF que quebra patch, paginação do `read_file` e comandos negados que abortam a linha inteira.
 
 Compartilhar uma skill significa compartilhar seus arquivos e suas regras. Isso não garante respostas idênticas entre modelos, nem instala ferramentas, conectores ou permissões.
 
