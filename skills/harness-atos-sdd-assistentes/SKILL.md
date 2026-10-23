@@ -30,7 +30,7 @@ Adaptação da skill `harness-atos-sdd` (repo agent-skills). Mantém o núcleo: 
 
 ### 0. Assumir e acompanhar o pedido
 - Ler [coordination.md](references/coordination.md) ao delegar, receber QA, retomar ou executar entrega. Essa é a fonte das transições e do registro de autorização.
-- Nomear responsável, estado, próxima ação e prazo no tracker existente. O responsável continua após delegação; QA não encerra deploy.
+- Manter responsável, estado e próxima ação; usar tracker e prazo para trabalho delegado, assíncrono, com efeitos externos ou de alto risco, conforme coordination.md. Pedido simples e síncrono pode ficar no contexto. O responsável continua após delegação; QA não encerra deploy.
 - Para operação de versão aprovada, começar por seleção/preflight/execução autorizada/verificação; etapas 1–3 só quando pertinentes ao requisito ou risco.
 
 ### 1. Descobrir (leitura remota)
