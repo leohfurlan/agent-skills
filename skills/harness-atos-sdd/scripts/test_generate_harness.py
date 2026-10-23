@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().with_name("generate_harness.py")
-PROFILE_COUNTS = {"minimal": 10, "standard": 18, "high-risk": 24}
+PROFILE_COUNTS = {"minimal": 11, "standard": 19, "high-risk": 25}
 
 
 def invoke(root: Path, profile: str, *extra: str) -> subprocess.CompletedProcess[str]:
@@ -38,6 +38,12 @@ def invoke(root: Path, profile: str, *extra: str) -> subprocess.CompletedProcess
 
 
 class GeneratorTests(unittest.TestCase):
+    def test_coordination_policy_matches_canonical_source(self) -> None:
+        base = SCRIPT.parent.parent
+        canonical = base.parent / "harness-atos-sdd-assistentes/references/coordination.md"
+        catalog = json.loads((base / "assets/harness_templates.json").read_text("utf-8"))
+        self.assertEqual(catalog["minimal"]["docs/agents/coordination.md"], canonical.read_text("utf-8"))
+
     def test_all_profiles_apply_validate_and_are_idempotent(self) -> None:
         for profile, count in PROFILE_COUNTS.items():
             with self.subTest(profile=profile), tempfile.TemporaryDirectory() as tmp:

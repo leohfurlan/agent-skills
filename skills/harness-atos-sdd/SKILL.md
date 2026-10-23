@@ -11,7 +11,7 @@ Gerar um harness versionável que transforme decisões de produto em mudanças v
 
 1. Ler as instruções do repositório e localizar fontes existentes de requisitos, domínio, decisões, CI e comandos.
 2. Inspecionar o estado Git e preservar alterações alheias. Trabalhar no checkout autorizado; usar worktree isolado quando a política do projeto exigir.
-3. Identificar o perfil solicitado. Na ausência de escolha explícita, recomendar `standard` e declarar a suposição antes de escrever.
+3. Para deploy de versão aprovada, seguir seleção → pré-requisitos → implantação autorizada → verificação, sem regenerar PRD/spec. Identificar o perfil solicitado. Na ausência de escolha explícita, recomendar `standard` e declarar a suposição antes de escrever.
 4. Ler [profiles.md](references/profiles.md) para o perfil escolhido. Ler [adoption.md](references/adoption.md) ao adaptar um repositório que já possua instruções, documentação ou gates.
 5. Inventariar fatos descobertos e decisões ainda pendentes. Obter do ambiente os comandos existentes; não inventar lint, testes, banco, tracker ou CI.
 
@@ -86,3 +86,7 @@ Informar:
 - ações externas não realizadas.
 
 Criar o harness não autoriza commit, push, PR, deploy, migration, criação de recursos externos ou registro global de outras skills.
+
+## Continuidade de pedidos
+
+Aplicar a política canônica de [coordenação](../harness-atos-sdd-assistentes/references/coordination.md). O gerador a instala em docs/agents/coordination.md; integrar preservando regras locais. QA aceito exige a próxima ação autorizada, não encerramento automático.
